@@ -68,21 +68,47 @@ class Hw1Env(environment.BaseEnv):
 
 
 def collect(idx, N):
+    # Use offscreen to run faster without a window popping up
     env = Hw1Env(render_mode="offscreen")
+    
+    # Pre-allocate tensors
+    # We need: Img_Before, Action, Img_After, Position_After
+    imgs_before = torch.zeros(N, 3, 128, 128, dtype=torch.uint8)
+    imgs_after = torch.zeros(N, 3, 128, 128, dtype=torch.uint8)
+    actions = torch.zeros(N, dtype=torch.long) # Changed to long for one_hot later
     positions = torch.zeros(N, 2, dtype=torch.float)
-    actions = torch.zeros(N, dtype=torch.uint8)
-    imgs = torch.zeros(N, 3, 128, 128, dtype=torch.uint8)
+
     for i in range(N):
+        env.reset() # Reset environment
+        
+        _, pixels_before = env.state()
+        imgs_before[i] = pixels_before
+        
         action_id = np.random.randint(4)
         env.step(action_id)
-        obj_pos, pixels = env.state()
-        positions[i] = torch.tensor(obj_pos)
         actions[i] = action_id
-        imgs[i] = pixels
-        env.reset()
-    torch.save(positions, f"positions_{idx}.pt")
+        
+        obj_pos, pixels_after = env.state()
+        positions[i] = torch.tensor(obj_pos)
+        imgs_after[i] = pixels_after
+
+    # Save all files
+    torch.save(imgs_before, f"imgs_before_{idx}.pt")
+    torch.save(imgs_after, f"imgs_after_{idx}.pt")
     torch.save(actions, f"actions_{idx}.pt")
-    torch.save(imgs, f"imgs_{idx}.pt")
+    torch.save(positions, f"positions_{idx}.pt")
+    print(f"Process {idx} finished collecting {N} samples.")
+
+if __name__ == "__main__":
+    # Collect 1000 samples total (4 processes * 250)
+    processes = []
+    for i in range(4):
+        p = Process(target=collect, args=(i, 250)) 
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
+
 
 
 if __name__ == "__main__":
